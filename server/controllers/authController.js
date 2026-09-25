@@ -90,7 +90,15 @@ const googleLogin = async (req, res) => {
 
     let user = await User.findOne({ firebaseUid });
     if (!user) {
-      user = await User.create({ firebaseUid, name, email });
+      // Fallback: check if email exists to avoid E11000 duplicate key error
+      user = await User.findOne({ email });
+      if (user) {
+        user.firebaseUid = firebaseUid;
+        if (name && name !== 'Google User' && !user.name) user.name = name;
+        await user.save();
+      } else {
+        user = await User.create({ firebaseUid, name, email });
+      }
     }
 
     res.json({
