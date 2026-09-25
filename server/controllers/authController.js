@@ -1,6 +1,6 @@
 const User = require('../models/User');
 const { validationResult } = require('express-validator');
-const admin = require('../config/firebase-admin');
+const adminAuth = require('../config/firebase-admin');
 
 // ─── POST /api/auth/register ──────────────────────────────────────────────────
 const register = async (req, res) => {
@@ -16,7 +16,7 @@ const register = async (req, res) => {
   }
 
   try {
-    const decodedToken = await admin.auth().verifyIdToken(firebaseToken);
+    const decodedToken = await adminAuth.verifyIdToken(firebaseToken);
     const firebaseUid = decodedToken.uid;
 
     const existing = await User.findOne({ firebaseUid });
@@ -54,7 +54,7 @@ const login = async (req, res) => {
   }
 
   try {
-    const decodedToken = await admin.auth().verifyIdToken(firebaseToken);
+    const decodedToken = await adminAuth.verifyIdToken(firebaseToken);
     const firebaseUid = decodedToken.uid;
 
     const user = await User.findOne({ firebaseUid });
@@ -85,7 +85,7 @@ const googleLogin = async (req, res) => {
   }
 
   try {
-    const decodedToken = await admin.auth().verifyIdToken(firebaseToken);
+    const decodedToken = await adminAuth.verifyIdToken(firebaseToken);
     const firebaseUid = decodedToken.uid;
 
     let user = await User.findOne({ firebaseUid });

@@ -1,4 +1,4 @@
-const admin = require('../config/firebase-admin');
+const adminAuth = require('../config/firebase-admin');
 const User = require('../models/User');
 
 const protect = async (req, res, next) => {
@@ -20,7 +20,7 @@ const protect = async (req, res, next) => {
   }
 
   try {
-    const decodedToken = await admin.auth().verifyIdToken(token);
+    const decodedToken = await adminAuth.verifyIdToken(token);
     const firebaseUid = decodedToken.uid;
 
     // Attach user to request

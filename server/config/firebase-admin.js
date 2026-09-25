@@ -1,7 +1,10 @@
-const admin = require('firebase-admin');
+const { initializeApp } = require('firebase-admin/app');
+const { getAuth } = require('firebase-admin/auth');
 
-admin.initializeApp({
+const app = initializeApp({
   projectId: "fintracker-8b26a"
 });
 
-module.exports = admin;
+const adminAuth = getAuth(app);
+
+module.exports = adminAuth;
