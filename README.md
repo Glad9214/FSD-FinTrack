@@ -85,8 +85,9 @@ cd fsd
 cd server
 npm install
 cp .env.example .env
-# Edit .env with your MongoDB Atlas URI and JWT secret
-npm run dev
+# Edit .env with your MongoDB Atlas URI (or leave default for automatic local persistent MongoDB)
+npm run test:mongo    # Verify MongoDB connection & CRUD operations
+npm run dev           # Start Express server with auto-reconnect
 ```
 
 ### Frontend Setup

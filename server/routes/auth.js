@@ -1,6 +1,6 @@
 const express = require('express');
 const { body } = require('express-validator');
-const { register, login, getMe } = require('../controllers/authController');
+const { register, login, googleLogin, getMe } = require('../controllers/authController');
 const { protect } = require('../middleware/auth');
 
 const router = express.Router();
@@ -19,13 +19,17 @@ router.post(
 router.post(
   '/login',
   [
-    body('email').isEmail().normalizeEmail().withMessage('Please provide a valid email'),
+    body('email')
+      .if(body('firebaseToken').not().exists())
+      .isEmail()
+      .normalizeEmail()
+      .withMessage('Please provide a valid email'),
   ],
   login
 );
 
 // POST /api/auth/google
-router.post('/google', require('../controllers/authController').googleLogin);
+router.post('/google', googleLogin);
 
 // GET /api/auth/me (protected)
 router.get('/me', protect, getMe);

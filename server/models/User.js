@@ -1,11 +1,13 @@
 const mongoose = require('mongoose');
+const bcrypt = require('bcryptjs');
 
 const userSchema = new mongoose.Schema(
   {
     firebaseUid: {
       type: String,
-      required: [true, 'Firebase UID is required'],
       unique: true,
+      sparse: true,
+      default: () => 'uid_' + new mongoose.Types.ObjectId(),
     },
     name: {
       type: String,
@@ -22,6 +24,10 @@ const userSchema = new mongoose.Schema(
       trim: true,
       match: [/^\S+@\S+\.\S+$/, 'Please provide a valid email address'],
     },
+    password: {
+      type: String,
+      select: false,
+    },
     avatar: {
       type: String,
       default: null,
@@ -36,9 +42,30 @@ const userSchema = new mongoose.Schema(
   }
 );
 
+// Hash password before saving if provided and modified
+userSchema.pre('save', async function (next) {
+  if (!this.isModified('password') || !this.password) {
+    return next();
+  }
+  try {
+    const salt = await bcrypt.genSalt(12);
+    this.password = await bcrypt.hash(this.password, salt);
+    next();
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Compare entered password with hashed password
+userSchema.methods.comparePassword = async function (candidatePassword) {
+  if (!this.password) return false;
+  return bcrypt.compare(candidatePassword, this.password);
+};
+
 // Remove sensitive fields from JSON output
 userSchema.methods.toJSON = function () {
   const obj = this.toObject();
+  delete obj.password;
   delete obj.__v;
   return obj;
 };
