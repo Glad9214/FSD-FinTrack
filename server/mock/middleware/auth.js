@@ -22,7 +22,7 @@ const protect = async (req, res, next) => {
     // Attach user to request (without password)
     const { password, ...safeUser } = user;
     req.user = safeUser;
-    
+
     next();
   } catch (error) {
     return res.status(401).json({ success: false, message: 'Invalid or expired token. Please log in again.' });
