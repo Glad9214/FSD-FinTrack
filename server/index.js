@@ -74,7 +74,8 @@ const healthHandler = (req, res) => {
   });
 };
 
-app.get(['/api/health', '/health'], healthHandler);
+app.get('/api/health', healthHandler);
+app.get('/health', healthHandler);
 
 // ─── API Routes (MongoDB Layer) ───────────────────────────────────────────────
 const authRoutes = require('./routes/auth');
@@ -82,10 +83,18 @@ const transactionRoutes = require('./routes/transactions');
 const budgetRoutes = require('./routes/budget');
 const analyticsRoutes = require('./routes/analytics');
 
-app.use(['/api/auth', '/auth'], authRoutes);
-app.use(['/api/transactions', '/transactions'], transactionRoutes);
-app.use(['/api/budget', '/budget'], budgetRoutes);
-app.use(['/api/analytics', '/analytics'], analyticsRoutes);
+// Mount routes on both /api/* (standard) and /* (for direct service routing)
+app.use('/api/auth', authRoutes);
+app.use('/auth', authRoutes);
+
+app.use('/api/transactions', transactionRoutes);
+app.use('/transactions', transactionRoutes);
+
+app.use('/api/budget', budgetRoutes);
+app.use('/budget', budgetRoutes);
+
+app.use('/api/analytics', analyticsRoutes);
+app.use('/analytics', analyticsRoutes);
 
 // ─── 404 Handler ──────────────────────────────────────────────────────────────
 app.use((req, res) => {
