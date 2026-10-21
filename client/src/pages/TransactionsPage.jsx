@@ -14,6 +14,7 @@ import Button from '../components/ui/Button';
 import EmptyState from '../components/ui/EmptyState';
 import { formatCurrency, formatDateFull, formatDateForInput, getCategoryColor } from '../utils/formatters';
 import { EXPENSE_CATEGORIES, INCOME_CATEGORIES, PAYMENT_METHODS } from '../styles/theme';
+import { playTransactionSound, unlockAudio } from '../utils/soundEffects';
 
 const ICON_MAP = {
   'Food': UtensilsCrossed, 'Books / Education': BookOpen, 'Travel': Car,
@@ -44,8 +45,11 @@ export default function TransactionsPage() {
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [deleting, setDeleting] = useState(false);
 
-  const fetchTransactions = useCallback(async () => {
-    setLoading(true);
+  // 3D Animation state
+  const [animationTrigger, setAnimationTrigger] = useState(null);
+
+  const fetchTransactions = useCallback(async (showSkeleton = true) => {
+    if (showSkeleton) setLoading(true);
     try {
       const params = {};
       if (activeFilter !== 'All') params.type = activeFilter.toLowerCase();
@@ -55,7 +59,7 @@ export default function TransactionsPage() {
     } catch (err) {
       toast.error('Failed to load transactions');
     } finally {
-      setLoading(false);
+      if (showSkeleton) setLoading(false);
     }
   }, [activeFilter, search]);
 
@@ -92,19 +96,61 @@ export default function TransactionsPage() {
     return Object.keys(e).length === 0;
   };
 
+  useEffect(() => {
+    if (!form.description || form.type === 'income' || editing) return;
+    const desc = form.description.toLowerCase();
+    
+    const suggestionMap = {
+      'swiggy': 'Food',
+      'zomato': 'Food',
+      'restaurant': 'Food',
+      'uber': 'Travel',
+      'ola': 'Travel',
+      'flight': 'Travel',
+      'train': 'Travel',
+      'amazon': 'Shopping',
+      'flipkart': 'Shopping',
+      'myntra': 'Shopping',
+      'netflix': 'Entertainment',
+      'spotify': 'Entertainment',
+      'movie': 'Entertainment',
+      'electricity': 'Bills',
+      'wifi': 'Bills',
+      'internet': 'Bills',
+      'grocery': 'Groceries',
+      'supermarket': 'Groceries',
+      'gym': 'Health',
+      'pharmacy': 'Health',
+    };
+
+    for (const [key, category] of Object.entries(suggestionMap)) {
+      if (desc.includes(key) && form.category !== category) {
+        setForm(prev => ({ ...prev, category }));
+        toast(`Categorized as ${category} 🪄`, { icon: '✨' });
+        break;
+      }
+    }
+  }, [form.description, form.type, editing]);
+
   const handleSave = async () => {
     if (!validateForm()) return;
+    // Pre-warm / unlock audio context within user click gesture
+    unlockAudio();
     setSaving(true);
     try {
       if (editing) {
         await transactionsAPI.update(editing._id, form);
         toast.success('Transaction updated');
+        setModalOpen(false);
       } else {
         await transactionsAPI.create(form);
-        toast.success('Transaction added');
+        setModalOpen(false);
+        // Play sound simultaneously with the + ADDED / - DEDUCTED animation
+        setAnimationTrigger(form.type);
+        playTransactionSound(form.type);
+        setTimeout(() => setAnimationTrigger(null), 2500);
       }
-      setModalOpen(false);
-      fetchTransactions();
+      fetchTransactions(false);
     } catch (err) {
       toast.error(err.response?.data?.message || 'Failed to save');
     } finally {
@@ -218,53 +264,57 @@ export default function TransactionsPage() {
               <span style={{ fontSize: '0.6875rem', fontWeight: 600, color: 'var(--color-text-faint)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Type</span>
             </div>
 
-            {transactions.map((tx, i) => {
-              const IconComp = ICON_MAP[tx.category] || MoreHorizontal;
-              const isIncome = tx.type === 'income';
-              return (
-                <div
-                  key={tx._id}
-                  style={{
-                    display: 'grid', gridTemplateColumns: '1fr 120px 120px 100px 60px', gap: '0.5rem',
-                    padding: '0.75rem 1.25rem', alignItems: 'center',
-                    borderBottom: i < transactions.length - 1 ? '1px solid var(--color-border)' : 'none',
-                    transition: 'background 0.15s',
-                  }}
-                  className="tx-table-row"
-                  onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--color-surface-hover)')}
-                  onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
-                >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', minWidth: 0 }}>
-                    <div style={{
-                      width: 34, height: 34, borderRadius: 8,
-                      background: `${getCategoryColor(tx.category)}12`,
-                      display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
-                    }}>
-                      <IconComp size={15} color={getCategoryColor(tx.category)} />
+            <AnimatePresence initial={false}>
+              {transactions.map((tx, i) => {
+                const IconComp = ICON_MAP[tx.category] || MoreHorizontal;
+                const isIncome = tx.type === 'income';
+                return (
+                  <motion.div
+                    key={tx._id}
+                    layout
+                    initial={{ opacity: 0, x: -20, backgroundColor: isIncome ? 'rgba(16, 185, 129, 0.2)' : 'rgba(239, 68, 68, 0.2)' }}
+                    animate={{ opacity: 1, x: 0, backgroundColor: 'rgba(0, 0, 0, 0)' }}
+                    exit={{ opacity: 0, scale: 0.95 }}
+                    transition={{ duration: 0.4 }}
+                    style={{
+                      display: 'grid', gridTemplateColumns: '1fr 120px 120px 100px 60px', gap: '0.5rem',
+                      padding: '0.75rem 1.25rem', alignItems: 'center',
+                      borderBottom: i < transactions.length - 1 ? '1px solid var(--color-border)' : 'none',
+                    }}
+                    className="tx-table-row"
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', minWidth: 0 }}>
+                      <div style={{
+                        width: 34, height: 34, borderRadius: 8,
+                        background: `${getCategoryColor(tx.category)}12`,
+                        display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+                      }}>
+                        <IconComp size={15} color={getCategoryColor(tx.category)} />
+                      </div>
+                      <div style={{ minWidth: 0 }}>
+                        <p style={{ fontSize: '0.8125rem', fontWeight: 500, color: 'var(--color-text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {tx.description || tx.category}
+                        </p>
+                        <p style={{ fontSize: '0.6875rem', color: 'var(--color-text-faint)' }}>{tx.paymentMethod || 'Cash'}</p>
+                      </div>
                     </div>
-                    <div style={{ minWidth: 0 }}>
-                      <p style={{ fontSize: '0.8125rem', fontWeight: 500, color: 'var(--color-text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                        {tx.description || tx.category}
-                      </p>
-                      <p style={{ fontSize: '0.6875rem', color: 'var(--color-text-faint)' }}>{tx.paymentMethod || 'Cash'}</p>
+                    <span style={{ fontSize: '0.8125rem', color: 'var(--color-text-secondary)' }}>{tx.category}</span>
+                    <span style={{ fontSize: '0.8125rem', color: 'var(--color-text-muted)' }}>{formatDateFull(tx.date)}</span>
+                    <span style={{ fontSize: '0.875rem', fontWeight: 600, color: isIncome ? '#10b981' : '#ef4444', textAlign: 'right' }}>
+                      {isIncome ? '+' : '-'}{formatCurrency(tx.amount)}
+                    </span>
+                    <div style={{ display: 'flex', gap: '0.25rem' }}>
+                      <button className="btn btn-ghost btn-sm" onClick={() => openEdit(tx)} style={{ padding: '0.3rem' }} title="Edit transaction">
+                        <Edit3 size={14} />
+                      </button>
+                      <button className="btn btn-ghost btn-sm trash-btn" data-cursor="danger" onClick={() => setDeleteTarget(tx)} style={{ padding: '0.3rem', color: 'var(--color-red)' }} title="Delete transaction">
+                        <Trash2 size={14} />
+                      </button>
                     </div>
-                  </div>
-                  <span style={{ fontSize: '0.8125rem', color: 'var(--color-text-secondary)' }}>{tx.category}</span>
-                  <span style={{ fontSize: '0.8125rem', color: 'var(--color-text-muted)' }}>{formatDateFull(tx.date)}</span>
-                  <span style={{ fontSize: '0.875rem', fontWeight: 600, color: isIncome ? '#10b981' : '#ef4444', textAlign: 'right' }}>
-                    {isIncome ? '+' : '-'}{formatCurrency(tx.amount)}
-                  </span>
-                  <div style={{ display: 'flex', gap: '0.25rem' }}>
-                    <button className="btn btn-ghost btn-sm" onClick={() => openEdit(tx)} style={{ padding: '0.3rem' }}>
-                      <Edit3 size={14} />
-                    </button>
-                    <button className="btn btn-ghost btn-sm" onClick={() => setDeleteTarget(tx)} style={{ padding: '0.3rem', color: 'var(--color-red)' }}>
-                      <Trash2 size={14} />
-                    </button>
-                  </div>
-                </div>
-              );
-            })}
+                  </motion.div>
+                );
+              })}
+            </AnimatePresence>
           </div>
         ) : (
           <EmptyState
@@ -289,11 +339,12 @@ export default function TransactionsPage() {
             <label className="field-label">Transaction Type</label>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.375rem', background: 'var(--color-bg-elevated)', border: '1px solid var(--color-border)', borderRadius: 10, padding: '0.25rem' }}>
               {[
-                { value: 'income', label: 'Income', icon: TrendingUp, color: '#10b981' },
-                { value: 'expense', label: 'Expense', icon: TrendingDown, color: '#ef4444' },
-              ].map(({ value, label, icon: Icon, color }) => (
+                { value: 'income', label: 'Income', icon: TrendingUp, color: '#10b981', cursor: 'success' },
+                { value: 'expense', label: 'Expense', icon: TrendingDown, color: '#ef4444', cursor: 'danger' },
+              ].map(({ value, label, icon: Icon, color, cursor }) => (
                 <button
                   key={value}
+                  data-cursor={cursor}
                   onClick={() => { setForm((f) => ({ ...f, type: value, category: '' })); }}
                   style={{
                     display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.375rem',
@@ -410,6 +461,112 @@ export default function TransactionsPage() {
           .tx-table-row > *:nth-child(3) { display: none !important; }
         }
       `}</style>
+
+      {/* ─── 3D Transaction Animation Overlay ─── */}
+      <AnimatePresence>
+        {animationTrigger && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0, transition: { duration: 0.5 } }}
+            style={{
+              position: 'fixed', inset: 0, zIndex: 9999, pointerEvents: 'none',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              perspective: 1000,
+            }}
+          >
+            {/* Background radial flash */}
+            <motion.div 
+              style={{
+                position: 'absolute', inset: 0,
+                background: animationTrigger === 'income' 
+                  ? 'radial-gradient(circle at center, rgba(16,185,129,0.15) 0%, transparent 60%)'
+                  : 'radial-gradient(circle at center, rgba(239,68,68,0.15) 0%, transparent 60%)',
+              }}
+              initial={{ scale: 0.5, opacity: 0 }}
+              animate={{ scale: 1.5, opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 1.5, ease: 'easeOut' }}
+            />
+            
+            <div style={{ position: 'relative', width: '100%', height: '100%' }}>
+              {[...Array(15)].map((_, i) => {
+                const isIncome = animationTrigger === 'income';
+                const randomX = (Math.random() - 0.5) * 800; // Scatter spread
+                const randomRotateX = Math.random() * 720;
+                const randomRotateY = Math.random() * 720;
+                const delay = Math.random() * 0.2;
+                const color = isIncome ? '#34d399' : '#fca5a5';
+                
+                return (
+                  <motion.div
+                    key={i}
+                    style={{
+                      position: 'absolute',
+                      left: '50%',
+                      top: '50%',
+                      width: 44,
+                      height: 44,
+                      borderRadius: '50%',
+                      background: `linear-gradient(135deg, ${isIncome ? '#10b981' : '#ef4444'}, ${isIncome ? '#059669' : '#dc2626'})`,
+                      boxShadow: `0 8px 16px rgba(0,0,0,0.6), inset 0 2px 4px rgba(255,255,255,0.4), 0 0 20px ${color}`,
+                      border: '2px solid rgba(255,255,255,0.2)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      transformStyle: 'preserve-3d',
+                      marginLeft: -22,
+                      marginTop: -22,
+                    }}
+                    initial={{
+                      x: 0, y: 0, scale: 0, rotateX: 0, rotateY: 0, opacity: 1,
+                    }}
+                    animate={{
+                      x: randomX,
+                      y: isIncome ? -400 - Math.random() * 300 : 400 + Math.random() * 300,
+                      scale: 1 + Math.random() * 0.5,
+                      rotateX: randomRotateX,
+                      rotateY: randomRotateY,
+                      opacity: [1, 1, 0],
+                    }}
+                    transition={{
+                      duration: 1.5 + Math.random() * 0.5,
+                      delay,
+                      ease: isIncome ? 'easeOut' : 'easeIn',
+                    }}
+                  >
+                    <span style={{ color: 'white', fontWeight: 800, fontSize: '22px', textShadow: '0 2px 4px rgba(0,0,0,0.5)' }}>
+                      ₹
+                    </span>
+                  </motion.div>
+                );
+              })}
+              
+              {/* Central Text Burst */}
+              <motion.div
+                style={{
+                  position: 'absolute', left: '50%', top: '50%',
+                  transform: 'translate(-50%, -50%)',
+                  textAlign: 'center',
+                }}
+                initial={{ scale: 0.5, opacity: 0, y: 20 }}
+                animate={{ scale: 1.2, opacity: 1, y: 0 }}
+                exit={{ scale: 1.5, opacity: 0 }}
+                transition={{ type: 'spring', stiffness: 300, damping: 20 }}
+              >
+                <h2 style={{
+                  fontSize: '3.5rem', fontWeight: 900,
+                  color: animationTrigger === 'income' ? '#34d399' : '#fca5a5',
+                  textShadow: `0 4px 20px ${animationTrigger === 'income' ? '#059669' : '#dc2626'}`,
+                  letterSpacing: '-0.02em',
+                }}>
+                  {animationTrigger === 'income' ? '+ ADDED' : '- DEDUCTED'}
+                </h2>
+              </motion.div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

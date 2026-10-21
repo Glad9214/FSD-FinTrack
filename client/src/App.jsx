@@ -18,14 +18,19 @@ import BudgetPage from './pages/BudgetPage';
 import AnalyticsPage from './pages/AnalyticsPage';
 import MonthlySummaryPage from './pages/MonthlySummaryPage';
 import ProfilePage from './pages/ProfilePage';
+import CustomCursor from './components/ui/CustomCursor';
+
+import { ThemeProvider } from './context/ThemeContext';
 
 function App() {
   return (
-    <BrowserRouter>
-      <AuthProvider>
-        <ToastProvider>
-          <Routes>
-            {/* Public routes */}
+    <ThemeProvider>
+      <CustomCursor />
+      <BrowserRouter>
+        <AuthProvider>
+          <ToastProvider>
+            <Routes>
+              {/* Public routes */}
             <Route path="/" element={<LandingPage />} />
             <Route path="/login" element={<LoginPage />} />
             <Route path="/register" element={<RegisterPage />} />
@@ -105,9 +110,10 @@ function App() {
             {/* Fallback */}
             <Route path="*" element={<NotFoundPage />} />
           </Routes>
-        </ToastProvider>
-      </AuthProvider>
-    </BrowserRouter>
+          </ToastProvider>
+        </AuthProvider>
+      </BrowserRouter>
+    </ThemeProvider>
   );
 }
 

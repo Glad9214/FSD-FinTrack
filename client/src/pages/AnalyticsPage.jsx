@@ -1,12 +1,12 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { motion } from 'framer-motion';
 import { BarChart3, PieChart as PieChartIcon, TrendingUp, ChevronLeft, ChevronRight } from 'lucide-react';
-import { analyticsAPI } from '../services/api';
+import { analyticsAPI, transactionsAPI } from '../services/api';
 import { formatCurrency, getCategoryColor } from '../utils/formatters';
 import { MONTH_NAMES, CHART_COLORS } from '../styles/theme';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
-  PieChart, Pie, Cell, AreaChart, Area,
+  PieChart, Pie, Cell, AreaChart, Area, Sector
 } from 'recharts';
 
 const monthShort = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
@@ -16,17 +16,21 @@ export default function AnalyticsPage() {
   const [year, setYear] = useState(now.getFullYear());
   const [categories, setCategories] = useState([]);
   const [monthlyData, setMonthlyData] = useState([]);
+  const [transactions, setTransactions] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [activePieIndex, setActivePieIndex] = useState(0);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
     try {
-      const [catRes, monthRes] = await Promise.allSettled([
+      const [catRes, monthRes, transRes] = await Promise.allSettled([
         analyticsAPI.categories({ year, type: 'expense' }),
         analyticsAPI.monthly({ year }),
+        transactionsAPI.getAll({ limit: 1000 }),
       ]);
       if (catRes.status === 'fulfilled') setCategories(catRes.value.data.categories || []);
       if (monthRes.status === 'fulfilled') setMonthlyData(monthRes.value.data.monthly || []);
+      if (transRes.status === 'fulfilled') setTransactions(transRes.value.data.transactions || []);
     } catch (err) {
       console.error(err);
     } finally {
@@ -57,17 +61,89 @@ export default function AnalyticsPage() {
 
   const totalExpenses = categories.reduce((s, c) => s + c.total, 0);
 
-  const CustomTooltip = ({ active, payload, label }) => {
+  // Heatmap Data
+  const heatmapStats = useMemo(() => {
+    const daysInMonth = new Date(year, now.getMonth() + 1, 0).getDate();
+    const targetMonth = now.getMonth();
+    const data = Array.from({ length: daysInMonth }, (_, i) => ({ day: i + 1, amount: 0 }));
+    let max = 0;
+    let sum = 0;
+    
+    transactions.forEach(t => {
+      const d = new Date(t.date);
+      if (d.getFullYear() === year && d.getMonth() === targetMonth && t.type === 'expense') {
+        data[d.getDate() - 1].amount += t.amount;
+      }
+    });
+
+    data.forEach(d => {
+      if (d.amount > max) max = d.amount;
+      sum += d.amount;
+    });
+
+    return { data, max, avg: sum / daysInMonth };
+  }, [transactions, year, now]);
+
+  const ChartTooltip = ({ active, payload, label }) => {
     if (!active || !payload?.length) return null;
     return (
-      <div style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)', borderRadius: 10, padding: '0.75rem 1rem', boxShadow: 'var(--shadow-lg)' }}>
-        <p style={{ fontSize: '0.8125rem', fontWeight: 600, color: 'var(--color-text-primary)', marginBottom: 4 }}>{label}</p>
+      <motion.div 
+        initial={{ opacity: 0, scale: 0.9, y: 5 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        transition={{ type: 'spring', stiffness: 400, damping: 25 }}
+        className="chart-tooltip"
+      >
+        <p className="chart-tooltip-label">{label}</p>
         {payload.map((p) => (
-          <p key={p.dataKey} style={{ fontSize: '0.8125rem', color: p.color }}>
-            {p.dataKey}: {formatCurrency(p.value)}
-          </p>
+          <div key={p.dataKey} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <div style={{ width: 8, height: 8, borderRadius: '50%', background: p.color, boxShadow: `0 0 8px ${p.color}` }} />
+              <span className="chart-tooltip-key">{p.dataKey}</span>
+            </div>
+            <span className="chart-tooltip-val">{formatCurrency(p.value)}</span>
+          </div>
         ))}
-      </div>
+      </motion.div>
+    );
+  };
+
+  const PieChartTooltip = ({ active, payload }) => {
+    if (!active || !payload?.length) return null;
+    const data = payload[0];
+    return (
+      <motion.div 
+        initial={{ opacity: 0, scale: 0.9, y: 5 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        transition={{ type: 'spring', stiffness: 400, damping: 25 }}
+        className="chart-tooltip"
+        style={{ border: `1px solid ${data.payload.color}50` }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <div style={{ width: 10, height: 10, borderRadius: '50%', background: data.payload.color, boxShadow: `0 0 10px ${data.payload.color}` }} />
+          <span className="chart-tooltip-key" style={{ textTransform: 'uppercase' }}>{data.name}</span>
+        </div>
+        <p className="chart-tooltip-val" style={{ margin: 0, marginLeft: 16 }}>
+          {formatCurrency(data.value)}
+        </p>
+      </motion.div>
+    );
+  };
+
+  const renderActivePieShape = (props) => {
+    const { cx, cy, innerRadius, outerRadius, startAngle, endAngle, fill } = props;
+    return (
+      <g>
+        <Sector
+          cx={cx}
+          cy={cy}
+          innerRadius={innerRadius}
+          outerRadius={outerRadius + 6}
+          startAngle={startAngle}
+          endAngle={endAngle}
+          fill={fill}
+          style={{ filter: `drop-shadow(0px 0px 8px ${fill}90)` }}
+        />
+      </g>
     );
   };
 
@@ -127,10 +203,10 @@ export default function AnalyticsPage() {
               {barData.length > 0 ? (
                 <ResponsiveContainer width="100%" height={250}>
                   <BarChart data={barData} barGap={4}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" />
+                    <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border-subtle)" />
                     <XAxis dataKey="name" tick={{ fill: '#64748b', fontSize: 11 }} axisLine={false} tickLine={false} />
                     <YAxis tick={{ fill: '#64748b', fontSize: 11 }} axisLine={false} tickLine={false} tickFormatter={(v) => `₹${(v/1000).toFixed(0)}K`} />
-                    <Tooltip content={<CustomTooltip />} />
+                    <Tooltip content={<ChartTooltip />} cursor={{ fill: 'rgba(59, 130, 246, 0.05)' }} offset={20} />
                     <Bar dataKey="Income" fill="#10b981" radius={[4, 4, 0, 0]} maxBarSize={28} />
                     <Bar dataKey="Expenses" fill="#ef4444" radius={[4, 4, 0, 0]} maxBarSize={28} />
                   </BarChart>
@@ -148,10 +224,10 @@ export default function AnalyticsPage() {
                 <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
                   <ResponsiveContainer width="50%" height={220}>
                     <PieChart>
-                      <Pie data={pieData} cx="50%" cy="50%" innerRadius={50} outerRadius={85} paddingAngle={3} dataKey="value" stroke="none">
-                        {pieData.map((entry, i) => <Cell key={i} fill={entry.color} />)}
+                      <Pie data={pieData} cx="50%" cy="50%" innerRadius={42} outerRadius={65} paddingAngle={3} dataKey="value" stroke="none" activeIndex={activePieIndex} activeShape={renderActivePieShape} onMouseEnter={(_, index) => setActivePieIndex(index)}>
+                        {pieData.map((entry, i) => <Cell key={i} fill={entry.color} style={{ transition: 'all 0.3s ease' }} />)}
                       </Pie>
-                      <Tooltip formatter={(v) => formatCurrency(v)} contentStyle={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)', borderRadius: 10 }} />
+                      <Tooltip content={<PieChartTooltip />} cursor={false} offset={35} wrapperStyle={{ zIndex: 100 }} />
                     </PieChart>
                   </ResponsiveContainer>
                   <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
@@ -186,14 +262,62 @@ export default function AnalyticsPage() {
                       <stop offset="100%" stopColor="#3b82f6" stopOpacity={0} />
                     </linearGradient>
                   </defs>
-                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" />
+                  <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border-subtle)" />
                   <XAxis dataKey="name" tick={{ fill: '#64748b', fontSize: 11 }} axisLine={false} tickLine={false} />
                   <YAxis tick={{ fill: '#64748b', fontSize: 11 }} axisLine={false} tickLine={false} tickFormatter={(v) => `₹${(v/1000).toFixed(0)}K`} />
-                  <Tooltip content={<CustomTooltip />} />
+                  <Tooltip content={<ChartTooltip />} cursor={{ stroke: 'rgba(59, 130, 246, 0.2)', strokeWidth: 1, strokeDasharray: '4 4' }} offset={20} />
                   <Area type="monotone" dataKey="Spending" stroke="#3b82f6" fill="url(#spendingGradient)" strokeWidth={2} dot={{ fill: '#3b82f6', r: 3 }} />
                 </AreaChart>
               </ResponsiveContainer>
             ) : <p style={{ color: 'var(--color-text-faint)', textAlign: 'center', padding: '3rem 0' }}>No spending data</p>}
+          </motion.div>
+
+          {/* ─── Spending Heatmap ─── */}
+          <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }} className="card" style={{ padding: '1.25rem', marginTop: '1.25rem' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '1rem' }}>
+              <div>
+                <h3 style={{ fontSize: '0.9375rem', fontWeight: 600, color: 'var(--color-text-primary)' }}>Spending Heatmap</h3>
+                <p style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)' }}>Daily intensity for {monthShort[now.getMonth()]} {year}</p>
+              </div>
+              <div style={{ textAlign: 'right' }}>
+                <p style={{ fontSize: '0.6875rem', color: 'var(--color-text-muted)', marginBottom: 2 }}>Average Daily</p>
+                <p style={{ fontSize: '0.875rem', fontWeight: 700, color: '#3b82f6' }}>{formatCurrency(heatmapStats.avg)}</p>
+              </div>
+            </div>
+            
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(28px, 1fr))', gap: 6 }}>
+              {heatmapStats.data.map(day => {
+                const intensity = heatmapStats.max > 0 ? day.amount / heatmapStats.max : 0;
+                let bg = 'rgba(255,255,255,0.03)';
+                if (intensity > 0) {
+                  // Color scale from light cyan to deep blue
+                  const alpha = 0.2 + (intensity * 0.8);
+                  bg = `rgba(59, 130, 246, ${alpha})`;
+                }
+                
+                return (
+                  <div key={day.day} style={{ position: 'relative', group: 'heatmap-cell' }} title={`Day ${day.day}: ${formatCurrency(day.amount)}`}>
+                    <div style={{
+                      aspectRatio: '1/1',
+                      background: bg,
+                      borderRadius: 4,
+                      border: intensity > 0 ? '1px solid rgba(59, 130, 246, 0.2)' : '1px solid rgba(255,255,255,0.05)',
+                      transition: 'all 0.2s ease',
+                      cursor: 'crosshair'
+                    }} 
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.transform = 'scale(1.1)';
+                      e.currentTarget.style.boxShadow = `0 0 10px ${bg}`;
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.transform = 'scale(1)';
+                      e.currentTarget.style.boxShadow = 'none';
+                    }}
+                    />
+                  </div>
+                );
+              })}
+            </div>
           </motion.div>
 
           {/* ─── Top Spending Categories ─── */}

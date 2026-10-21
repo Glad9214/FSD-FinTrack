@@ -71,7 +71,7 @@ export default function BudgetPage() {
 
   const budgetAmount = budget?.amount || 0;
   const used = budgetAmount > 0 ? Math.min((totalExpenses / budgetAmount) * 100, 100) : 0;
-  const remaining = Math.max(budgetAmount - totalExpenses, 0);
+  const remaining = budgetAmount - totalExpenses;
   const status = getBudgetStatus(used);
 
   return (

@@ -71,7 +71,7 @@ export default function MonthlySummaryPage() {
   const budgetUsed = budgetAmount > 0 ? Math.min((totalExpenses / budgetAmount) * 100, 100) : 0;
   const budgetStatus = getBudgetStatus(budgetUsed);
   const totalCatExpenses = categories.reduce((s, c) => s + c.total, 0);
-  const hasData = totalIncome > 0 || totalExpenses > 0;
+  const hasData = totalIncome > 0 || totalExpenses > 0 || budgetAmount > 0;
 
   const statCards = [
     { label: 'Total Income', value: formatCurrency(totalIncome), color: '#10B981', icon: TrendingUp, bg: 'rgba(16,185,129,0.08)', border: 'rgba(16,185,129,0.18)' },
@@ -210,7 +210,7 @@ export default function MonthlySummaryPage() {
                 />
               </div>
               <p style={{ fontSize: '0.75rem', color: 'var(--color-text-faint)', marginTop: 6 }}>
-                {budgetStatus.label} — {formatCurrency(Math.max(budgetAmount - totalExpenses, 0))} remaining
+                {budgetStatus.label} — {formatCurrency(budgetAmount - totalExpenses)} remaining
               </p>
             </motion.div>
           )}
