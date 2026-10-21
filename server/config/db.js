@@ -39,10 +39,13 @@ const connectDB = async () => {
       console.log(`✅ MongoDB Atlas Connected: ${conn.connection.host}`);
       return conn;
     } catch (atlasError) {
-      console.warn(`\n⚠️  MongoDB Atlas could not be reached:`);
-      console.warn(`   Reason: ${atlasError.message}`);
-      console.warn(`   (Note: Network/Wi-Fi may block TCP port 27017, or current IP is not in Atlas Network Access.)`);
-      console.log(`🔄 Automatically falling back to Local Persistent MongoDB...\n`);
+      console.error(`\n❌ MongoDB Atlas could not be reached:`);
+      console.error(`   Reason: ${atlasError.message}`);
+      console.error(`   👉 Check MongoDB Atlas: Go to "Network Access" and ensure "0.0.0.0/0" (Allow from Anywhere) is active!`);
+      if (process.env.NODE_ENV === 'production') {
+        throw new Error(`MongoDB Atlas connection failed: ${atlasError.message}. Ensure MONGO_URI is configured and 0.0.0.0/0 is added to Atlas Network Access.`);
+      }
+      console.log(`🔄 Automatically falling back to Local Persistent MongoDB for development...\n`);
     }
   }
 

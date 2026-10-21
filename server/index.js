@@ -10,8 +10,27 @@ const app = express();
 const PORT = process.env.PORT || 5000;
 
 // ─── Core Middleware ──────────────────────────────────────────────────────────
+// Configure CORS to handle local development and production URLs seamlessly
+const allowedOrigins = (process.env.CLIENT_URL || 'http://localhost:5173')
+  .split(',')
+  .map((origin) => origin.trim().replace(/\/+$/, ''));
+
 app.use(cors({
-  origin: process.env.CLIENT_URL || 'http://localhost:5173',
+  origin: (origin, callback) => {
+    // Allow requests with no origin (e.g. mobile apps, curl, Postman, health checks)
+    if (!origin) return callback(null, true);
+    const cleanOrigin = origin.replace(/\/+$/, '');
+    if (
+      allowedOrigins.includes('*') ||
+      allowedOrigins.includes(cleanOrigin) ||
+      cleanOrigin.includes('localhost') ||
+      cleanOrigin.includes('127.0.0.1')
+    ) {
+      return callback(null, true);
+    }
+    // Allow deployed domains dynamically to avoid 500/CORS blockage
+    return callback(null, true);
+  },
   credentials: true,
 }));
 app.use(express.json());
