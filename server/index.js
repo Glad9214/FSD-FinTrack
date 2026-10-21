@@ -40,8 +40,22 @@ if (process.env.NODE_ENV === 'development') {
   app.use(morgan('dev'));
 }
 
+// ─── Database Middleware (Ensures DB connection on Vercel Serverless) ────────
+app.use(async (req, res, next) => {
+  try {
+    await connectDB();
+    next();
+  } catch (err) {
+    console.error('❌ Database connection failure during request:', err.message);
+    return res.status(500).json({
+      success: false,
+      message: 'Database connection failed. Ensure MongoDB Atlas Network Access allows 0.0.0.0/0.',
+    });
+  }
+});
+
 // ─── Health Check ─────────────────────────────────────────────────────────────
-app.get('/api/health', (req, res) => {
+const healthHandler = (req, res) => {
   const readyStates = ['disconnected', 'connected', 'connecting', 'disconnecting'];
   const dbStatus = readyStates[mongoose.connection.readyState] || 'unknown';
   
@@ -49,7 +63,8 @@ app.get('/api/health', (req, res) => {
     status: 'ok',
     message: 'Finance Tracker API is running',
     timestamp: new Date().toISOString(),
-    environment: process.env.NODE_ENV || 'development',
+    environment: process.env.NODE_ENV || (process.env.VERCEL ? 'production' : 'development'),
+    serverless: Boolean(process.env.VERCEL),
     database: {
       status: dbStatus,
       host: mongoose.connection.host || null,
@@ -57,14 +72,20 @@ app.get('/api/health', (req, res) => {
       type: mongoose.connection.host?.includes('mongodb.net') ? 'Atlas Cloud' : 'Local Persistent MongoDB',
     },
   });
-});
+};
+
+app.get(['/api/health', '/health'], healthHandler);
 
 // ─── API Routes (MongoDB Layer) ───────────────────────────────────────────────
-console.log('🔗 Using MongoDB Database Layer');
-app.use('/api/auth', require('./routes/auth'));
-app.use('/api/transactions', require('./routes/transactions'));
-app.use('/api/budget', require('./routes/budget'));
-app.use('/api/analytics', require('./routes/analytics'));
+const authRoutes = require('./routes/auth');
+const transactionRoutes = require('./routes/transactions');
+const budgetRoutes = require('./routes/budget');
+const analyticsRoutes = require('./routes/analytics');
+
+app.use(['/api/auth', '/auth'], authRoutes);
+app.use(['/api/transactions', '/transactions'], transactionRoutes);
+app.use(['/api/budget', '/budget'], budgetRoutes);
+app.use(['/api/analytics', '/analytics'], analyticsRoutes);
 
 // ─── 404 Handler ──────────────────────────────────────────────────────────────
 app.use((req, res) => {
@@ -77,7 +98,7 @@ app.use((err, req, res, next) => {
   res.status(err.status || 500).json({
     success: false,
     message: process.env.NODE_ENV === 'production'
-      ? 'Internal server error'
+      ? (err.message || 'Internal server error')
       : err.message,
   });
 });
@@ -98,4 +119,9 @@ async function startServer() {
   });
 }
 
-startServer();
+// Start listener for local node execution, skip if running under Vercel serverless
+if (!process.env.VERCEL && require.main === module) {
+  startServer();
+}
+
+module.exports = app;

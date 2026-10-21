@@ -4,12 +4,25 @@
   "description": "Personal Finance & Monthly Budget Tracker — Full Stack Web Application",
   "private": true,
   "scripts": {
+    "build": "cd client && npm install && npm run build",
+    "start": "node server/index.js",
     "server": "cd server && npm run dev",
     "client": "cd client && npm run dev",
     "install:server": "cd server && npm install",
     "install:client": "cd client && npm install",
-    "install:all": "npm run install:server && npm run install:client",
+    "install:all": "npm install && npm run install:server && npm run install:client",
     "test:mongo": "cd server && npm run test:mongo",
     "test:journey": "cd server && npm run test:journey"
+  },
+  "dependencies": {
+    "bcryptjs": "^2.4.3",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "express-validator": "^7.2.0",
+    "firebase-admin": "^14.5.0",
+    "jsonwebtoken": "^9.0.2",
+    "mongoose": "^7.8.12",
+    "morgan": "^1.10.0"
   }
 }
