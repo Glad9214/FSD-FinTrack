@@ -49,11 +49,13 @@ const register = async (req, res) => {
         email: normalizedEmail,
       });
 
+      const token = generateJWT(user._id);
+
       return res.status(201).json({
         success: true,
         message: 'Account created successfully.',
         user: user.toJSON(),
-        token: firebaseToken,
+        token,
       });
     }
 
@@ -118,11 +120,13 @@ const login = async (req, res) => {
         });
       }
 
+      const token = generateJWT(user._id);
+
       return res.json({
         success: true,
         message: 'Login successful.',
         user: user.toJSON(),
-        token: firebaseToken,
+        token,
       });
     }
 
@@ -195,11 +199,13 @@ const googleLogin = async (req, res) => {
       }
     }
 
+    const token = generateJWT(user._id);
+
     res.json({
       success: true,
       message: 'Google Login successful.',
       user: user.toJSON(),
-      token: firebaseToken,
+      token,
     });
   } catch (error) {
     console.error('Google Login error:', error);

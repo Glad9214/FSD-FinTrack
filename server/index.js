@@ -1,4 +1,7 @@
+const path = require('path');
 require('dotenv').config();
+require('dotenv').config({ path: path.join(__dirname, '.env') });
+require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
 const express = require('express');
 const cors = require('cors');
 const morgan = require('morgan');
@@ -128,9 +131,11 @@ async function startServer() {
   });
 }
 
-// Start listener for local node execution, skip if running under Vercel serverless
-if (!process.env.VERCEL && require.main === module) {
+// Start listener for standalone node execution
+if (require.main === module) {
   startServer();
 }
 
+app.default = app;
 module.exports = app;
+module.exports.default = app;
